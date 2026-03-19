@@ -1,20 +1,13 @@
 use crate::{
     capturer::{Area, Options, Point, Resolution, Size},
     frame::{AudioFormat, AudioFrame, BGRAFrame, Frame, FrameType, VideoFrame},
-    targets::{self, get_scale_factor, Target},
+    targets::{self, Target},
 };
 use ::windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
-use cpal::{
-    traits::{DeviceTrait, HostTrait, StreamTrait},
-    StreamInstant,
-};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{cmp, time::Duration};
-use std::{
-    os::windows,
-    ptr::null_mut,
-    sync::mpsc::{self, Receiver, RecvTimeoutError, Sender},
-};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use windows_capture::{
     capture::{CaptureControl, Context, GraphicsCaptureApiHandler},
     frame::Frame as WCFrame,
@@ -104,7 +97,7 @@ impl GraphicsCaptureApiHandler for Capturer {
                     Err(_) => return Err(("Failed to get raw buffer").into()),
                 };
 
-                let current_time = SystemTime::now()
+                let _current_time = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .expect("Failed to get current time")
                     .as_nanos() as u64;
@@ -123,7 +116,7 @@ impl GraphicsCaptureApiHandler for Capturer {
                 let mut frame_buffer = frame.buffer().unwrap();
                 let raw_frame_buffer = frame_buffer.as_raw_buffer();
                 let frame_data = raw_frame_buffer.to_vec();
-                let current_time = SystemTime::now()
+                let _current_time = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .expect("Failed to get current time")
                     .as_nanos() as u64;
@@ -264,7 +257,7 @@ pub fn create_capturer(
 }
 
 pub fn get_output_frame_size(options: &Options) -> [u32; 2] {
-    let target = options
+    let _target = options
         .target
         .clone()
         .unwrap_or_else(|| Target::Display(targets::get_main_display()));
@@ -292,7 +285,7 @@ pub fn get_output_frame_size(options: &Options) -> [u32; 2] {
     [output_width, output_height]
 }
 
-fn get_absolute_value(value: f64, scale_factor: f64) -> f64 {
+fn get_absolute_value(value: f64, _scale_factor: f64) -> f64 {
     let value = (value).floor();
     value + value % 2.0
 }
@@ -422,7 +415,7 @@ fn spawn_audio_stream(
                 Err(_) => return,
             };
 
-            let (data, info, timestamp) = match sample_rx.recv_timeout(Duration::from_millis(100)) {
+            let (data, _info, timestamp) = match sample_rx.recv_timeout(Duration::from_millis(100)) {
                 Ok(Ok(data)) => data,
                 Err(RecvTimeoutError::Timeout) => {
                     continue;
