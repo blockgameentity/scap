@@ -53,7 +53,10 @@ fn main() {
     });
 
     // Start Capture
-    recorder.start_capture();
+    if let Err(err) = recorder.start_capture() {
+        println!("Problem with starting Capture: {err}");
+        process::exit(1);
+    }
 
     // Capture 100 frames
     for i in 0..100 {

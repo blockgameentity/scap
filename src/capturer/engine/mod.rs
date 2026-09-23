@@ -1,6 +1,6 @@
 use std::sync::mpsc;
 
-use super::Options;
+use super::{CapturerBuildError, Options};
 use crate::frame::Frame;
 
 #[cfg(target_os = "macos")]
@@ -58,54 +58,61 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new(options: &Options, tx: mpsc::Sender<ChannelItem>) -> Engine {
+    pub fn new(
+        options: &Options,
+        tx: mpsc::Sender<ChannelItem>,
+    ) -> Result<Engine, CapturerBuildError> {
         #[cfg(target_os = "macos")]
         {
             let error_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-            let mac = mac::create_capturer(options, tx, error_flag.clone()).unwrap();
+            let mac = mac::create_capturer(options, tx, error_flag.clone())
+                .map_err(|error| CapturerBuildError::Engine(error.to_string()))?;
 
-            Engine {
+            Ok(Engine {
                 mac,
                 error_flag,
                 options: (*options).clone(),
-            }
+            })
         }
 
         #[cfg(target_os = "windows")]
         {
             let win = win::create_capturer(&options, tx).unwrap();
-            return Engine {
+            return Ok(Engine {
                 win,
                 options: (*options).clone(),
-            };
+            });
         }
 
         #[cfg(target_os = "linux")]
         {
             let linux = linux::create_capturer(&options, tx);
-            return Engine {
+            return Ok(Engine {
                 linux,
                 options: (*options).clone(),
-            };
+            });
         }
     }
 
-    pub fn start(&mut self) {
+    pub fn start(&mut self) -> Result<(), CapturerBuildError> {
         #[cfg(target_os = "macos")]
         {
             use futures::executor::block_on;
 
-            block_on(self.mac.2.start()).expect("Failed to start capture");
+            block_on(self.mac.2.start())
+                .map_err(|error| CapturerBuildError::Engine(format!("{error:?}")))
         }
 
         #[cfg(target_os = "windows")]
         {
             self.win.start_capture();
+            return Ok(());
         }
 
         #[cfg(target_os = "linux")]
         {
             self.linux.start_capture();
+            return Ok(());
         }
     }
 

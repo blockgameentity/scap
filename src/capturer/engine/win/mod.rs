@@ -5,9 +5,9 @@ use crate::{
 };
 use ::windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{cmp, time::Duration};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use windows_capture::{
     capture::{CaptureControl, Context, GraphicsCaptureApiHandler},
     frame::Frame as WCFrame,
@@ -415,7 +415,8 @@ fn spawn_audio_stream(
                 Err(_) => return,
             };
 
-            let (data, _info, timestamp) = match sample_rx.recv_timeout(Duration::from_millis(100)) {
+            let (data, _info, timestamp) = match sample_rx.recv_timeout(Duration::from_millis(100))
+            {
                 Ok(Ok(data)) => data,
                 Err(RecvTimeoutError::Timeout) => {
                     continue;

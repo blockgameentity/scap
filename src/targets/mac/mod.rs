@@ -1,7 +1,11 @@
-use cidre::{cg, ns, sc};
-use cocoa::appkit::{NSApp, NSScreen};
-use cocoa::base::{id, nil};
-use cocoa::foundation::{NSRect, NSString, NSUInteger};
+use cidre::{cg, sc};
+// Allowed here; rationale documented on `get_display_name` below.
+#[allow(deprecated)]
+use cocoa::{
+    appkit::NSScreen,
+    base::{id, nil},
+    foundation::NSString,
+};
 use futures::executor::block_on;
 use objc::{msg_send, sel, sel_impl};
 
@@ -9,6 +13,17 @@ use crate::engine::mac::ext::DirectDisplayIdExt;
 
 use super::{Display, Target};
 
+// NOTE: the `cocoa`/`objc` crates are deprecated upstream in favour of `objc2`,
+// but they remain the simplest version-compatible way to map an `NSScreen` to its
+// `CGDirectDisplayID` (`deviceDescription`/`NSScreenNumber`) across our supported
+// range (macOS 12.3+). `cidre::ns::Screen` doesn't bind `deviceDescription`, and
+// `NSScreen.CGDirectDisplayID` only exists on macOS 26+. Migrating to `objc2`
+// is future work; until then the deprecation warnings are intentionally allowed.
+#[allow(deprecated)]
+// The legacy `objc` crate's `msg_send!` expansion checks for a `cargo-clippy` cfg
+// that doesn't exist in this crate. That lint fires inside the external macro
+// and can't be fixed from here, so it is allowed at the use site.
+#[allow(unexpected_cfgs)]
 fn get_display_name(display_id: cg::DirectDisplayId) -> String {
     unsafe {
         // Get all screens
@@ -37,7 +52,14 @@ fn get_display_name(display_id: cg::DirectDisplayId) -> String {
 pub fn get_all_targets() -> Vec<Target> {
     let mut targets: Vec<Target> = Vec::new();
 
-    let content = block_on(sc::ShareableContent::current()).unwrap();
+    // Without a screen-recording grant this fails (or yields nothing), which is
+    // an ordinary pre-consent state rather than a programming error: callers
+    // enumerate first and capture second, and the capture attempt is what
+    // summons the system's allow prompt. Never panic here.
+    let content = match block_on(sc::ShareableContent::current()) {
+        Ok(content) => content,
+        Err(_) => return targets,
+    };
 
     // Add displays to targets
     for display in content.displays().iter() {

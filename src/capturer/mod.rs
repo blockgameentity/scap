@@ -6,7 +6,7 @@ use engine::ChannelItem;
 
 use crate::{
     frame::{Frame, FrameType},
-    has_permission, is_supported,
+    is_supported,
     targets::Target,
 };
 
@@ -85,6 +85,7 @@ pub struct Capturer {
 pub enum CapturerBuildError {
     NotSupported,
     PermissionNotGranted,
+    Engine(String),
 }
 
 impl std::fmt::Display for CapturerBuildError {
@@ -94,6 +95,9 @@ impl std::fmt::Display for CapturerBuildError {
             CapturerBuildError::PermissionNotGranted => {
                 write!(f, "Permission to capture the screen is not granted")
             }
+            CapturerBuildError::Engine(error) => {
+                write!(f, "Capture engine error: {error}")
+            }
         }
     }
 }
@@ -101,27 +105,32 @@ impl std::fmt::Display for CapturerBuildError {
 impl Error for CapturerBuildError {}
 
 impl Capturer {
-    /// Build a new [Capturer] instance with the provided options
+    /// Build a new [Capturer] instance with the provided options.
+    ///
+    /// Note: this deliberately does not check screen-recording permission first.
+    /// On macOS 15+, attempting the capture is what summons the system's inline
+    /// allow prompt ("bypass the privacy picker" authorisation); failing fast on
+    /// a preflight check would prevent that prompt from ever appearing. A denial
+    /// surfaces as an error from engine creation or `start_capture` instead.
     pub fn build(options: Options) -> Result<Capturer, CapturerBuildError> {
         if !is_supported() {
             return Err(CapturerBuildError::NotSupported);
         }
 
-        if !has_permission() {
-            return Err(CapturerBuildError::PermissionNotGranted);
-        }
-
         let (tx, rx) = mpsc::channel();
-        let engine = engine::Engine::new(&options, tx);
+        let engine = engine::Engine::new(&options, tx)?;
 
         Ok(Capturer { engine, rx })
     }
 
     // TODO
     // Prevent starting capture if already started
-    /// Start capturing the frames
-    pub fn start_capture(&mut self) {
-        self.engine.start();
+    /// Start capturing the frames.
+    ///
+    /// Returns an error if the operating system refuses the capture (e.g. the
+    /// user denied the permission prompt) instead of panicking.
+    pub fn start_capture(&mut self) -> Result<(), CapturerBuildError> {
+        self.engine.start()
     }
 
     /// Stop the capturer
