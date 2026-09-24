@@ -55,6 +55,7 @@ pub fn get_all_targets() -> Vec<Target> {
     return linux::get_all_targets();
 }
 
+#[allow(unused_variables)]
 pub fn get_scale_factor(target: &Target) -> f64 {
     #[cfg(target_os = "macos")]
     return mac::get_scale_factor(target);
@@ -77,6 +78,7 @@ pub fn get_main_display() -> Display {
     unreachable!();
 }
 
+#[allow(unused_variables)]
 pub fn get_target_dimensions(target: &Target) -> (u64, u64) {
     #[cfg(target_os = "macos")]
     return mac::get_target_dimensions(target);

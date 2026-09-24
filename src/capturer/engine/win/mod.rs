@@ -51,14 +51,14 @@ impl GraphicsCaptureApiHandler for Capturer {
             start_time: (
                 unsafe {
                     let mut time = 0;
-                    QueryPerformanceCounter(&mut time);
+                    let _ = QueryPerformanceCounter(&mut time);
                     time
                 },
                 SystemTime::now(),
             ),
             perf_freq: unsafe {
                 let mut freq = 0;
-                QueryPerformanceFrequency(&mut freq);
+                let _ = QueryPerformanceFrequency(&mut freq);
                 freq
             },
         })
@@ -69,7 +69,7 @@ impl GraphicsCaptureApiHandler for Capturer {
         frame: &mut WCFrame,
         _: InternalCaptureControl,
     ) -> Result<(), Self::Error> {
-        let elapsed = frame.timestamp().Duration - self.start_time.0;
+        let elapsed = frame.timestamp()?.Duration - self.start_time.0;
         let display_time = self
             .start_time
             .1
@@ -87,15 +87,13 @@ impl GraphicsCaptureApiHandler for Capturer {
                 let end_y = (cropped_area.origin.y + cropped_area.size.height) as u32;
 
                 // crop the frame
-                let mut cropped_buffer = frame
+                let cropped_buffer = frame
                     .buffer_crop(start_x, start_y, end_x, end_y)
                     .expect("Failed to crop buffer");
 
                 // get raw frame buffer
-                let raw_frame_buffer = match cropped_buffer.as_nopadding_buffer() {
-                    Ok(buffer) => buffer,
-                    Err(_) => return Err(("Failed to get raw buffer").into()),
-                };
+                let mut nopadding_buf = Vec::new();
+                let raw_frame_buffer = cropped_buffer.as_nopadding_buffer(&mut nopadding_buf);
 
                 let _current_time = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
@@ -112,6 +110,9 @@ impl GraphicsCaptureApiHandler for Capturer {
                 let _ = self.tx.send(Frame::Video(VideoFrame::BGRA(bgr_frame)));
             }
             None => {
+                // NOTE: `FrameBuffer` borrows `frame`, so cache dimensions first.
+                let width = frame.width() as i32;
+                let height = frame.height() as i32;
                 // get raw frame buffer
                 let mut frame_buffer = frame.buffer().unwrap();
                 let raw_frame_buffer = frame_buffer.as_raw_buffer();
@@ -122,8 +123,8 @@ impl GraphicsCaptureApiHandler for Capturer {
                     .as_nanos() as u64;
                 let bgr_frame = BGRAFrame {
                     display_time,
-                    width: frame.width() as i32,
-                    height: frame.height() as i32,
+                    width,
+                    height,
                     data: frame_data,
                 };
 
@@ -171,8 +172,8 @@ struct FlagStruct {
 
 #[derive(Debug)]
 pub enum CreateCapturerError {
-    AudioStreamConfig(cpal::DefaultStreamConfigError),
-    BuildAudioStream(cpal::BuildStreamError),
+    AudioStreamConfig(cpal::Error),
+    BuildAudioStream(cpal::Error),
 }
 
 pub fn create_capturer(
@@ -335,15 +336,13 @@ enum AudioStreamControl {
 }
 
 fn build_audio_stream(
-    sample_tx: mpsc::Sender<
-        Result<(Vec<u8>, cpal::InputCallbackInfo, SystemTime), cpal::StreamError>,
-    >,
+    sample_tx: mpsc::Sender<Result<(Vec<u8>, cpal::InputCallbackInfo, SystemTime), cpal::Error>>,
 ) -> Result<(cpal::Stream, cpal::SupportedStreamConfig), CreateCapturerError> {
     let host = cpal::default_host();
     let output_device =
         host.default_output_device()
             .ok_or(CreateCapturerError::AudioStreamConfig(
-                cpal::DefaultStreamConfigError::DeviceNotAvailable,
+                cpal::ErrorKind::DeviceNotAvailable.into(),
             ))?;
     let supported_config = output_device
         .default_output_config()
@@ -352,7 +351,7 @@ fn build_audio_stream(
 
     let stream = output_device
         .build_input_stream_raw(
-            &config,
+            config,
             supported_config.sample_format(),
             {
                 let sample_tx = sample_tx.clone();
@@ -435,7 +434,7 @@ fn spawn_audio_stream(
                 false,
                 data,
                 sample_count,
-                config.sample_rate().0,
+                config.sample_rate(),
                 timestamp,
             );
 

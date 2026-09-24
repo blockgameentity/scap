@@ -20,6 +20,7 @@ pub type ChannelItem = (
 #[cfg(not(target_os = "macos"))]
 pub type ChannelItem = Frame;
 
+#[allow(unused_variables)]
 pub fn get_output_frame_size(options: &Options) -> [u32; 2] {
     #[cfg(target_os = "macos")]
     {
@@ -34,7 +35,7 @@ pub fn get_output_frame_size(options: &Options) -> [u32; 2] {
     #[cfg(target_os = "linux")]
     {
         // TODO: How to calculate this on Linux?
-        return [0, 0];
+        [0, 0]
     }
 }
 
@@ -86,11 +87,11 @@ impl Engine {
 
         #[cfg(target_os = "linux")]
         {
-            let linux = linux::create_capturer(&options, tx);
-            return Ok(Engine {
+            let linux = linux::create_capturer(options, tx);
+            Ok(Engine {
                 linux,
                 options: (*options).clone(),
-            });
+            })
         }
     }
 
@@ -112,7 +113,7 @@ impl Engine {
         #[cfg(target_os = "linux")]
         {
             self.linux.start_capture();
-            return Ok(());
+            Ok(())
         }
     }
 
